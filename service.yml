@@ -1,0 +1,144 @@
+name: tempo
+title: Grafana Tempo
+guidance: GUIDANCE.md
+icon: tempo
+type: service
+scalable: false
+
+labels:
+- tempo
+- tracing
+- observability
+
+options:
+- version: '3.1'
+  tag: '3.1.1'
+  default: true
+
+endpoints:
+- name: tempo
+  ports:
+  # Query API that Grafana reads traces from.
+  - name: http
+    number: 3200
+    protocol: http
+    main: true
+    private: true
+  # OTLP ingest for senders inside the environment, usually the OpenTelemetry Collector.
+  - name: otlp-grpc
+    number: 4317
+    protocol: tcp
+    private: true
+  - name: otlp-http
+    number: 4318
+    protocol: http
+    private: true
+
+volumes:
+- name: data
+  title: Tempo data
+  size: 20
+  helm:
+    labels: persistence.labels
+    values:
+    - name: persistence.enabled
+      value: true
+    - name: persistence.existingClaim
+      value: '{{volumes.data.claim}}'
+    - name: persistence.size
+      value: '{{volumes.data.size}}Gi'
+
+configs:
+- name: config
+  title: Tempo config
+  config: tempo.yaml
+  filepath: /etc/tempo/tempo.yaml
+
+helm:
+  name: wodby
+  source: oci://registry-1.docker.io/wodby/stateful
+  chart: oci://registry-1.docker.io/wodby/stateful
+  version: 0.2.0
+  valueMappings:
+    replicas: replicaCount
+    nameOverride: nameOverride
+    fullnameOverride: fullnameOverride
+    serviceAccountName: serviceAccount.name
+    serviceAccountCreate: serviceAccount.create
+    strategy: updateStrategy.type
+    minReady: minReadySeconds
+    shutdownGracePeriod: terminationGracePeriodSeconds
+  values:
+  - name: containerName
+    value: tempo
+  - name: args
+    value:
+    - -config.file=/etc/tempo/tempo.yaml
+  - name: containerPorts
+    value:
+    - name: http
+      containerPort: 3200
+      protocol: TCP
+    - name: otlp-grpc
+      containerPort: 4317
+      protocol: TCP
+    - name: otlp-http
+      containerPort: 4318
+      protocol: TCP
+  - name: headlessService.enabled
+    value: false
+  - name: persistence.mountPath
+    value: /var/tempo
+  - name: podSecurityContext
+    value:
+      fsGroup: 10001
+      fsGroupChangePolicy: OnRootMismatch
+  - name: securityContext
+    value:
+      allowPrivilegeEscalation: false
+      runAsNonRoot: true
+      runAsUser: 10001
+      runAsGroup: 10001
+  # Tempo flushes recent traces from memory to the volume when it stops.
+  - name: terminationGracePeriodSeconds
+    value: 60
+  - name: startupProbe
+    value:
+      httpGet:
+        path: /ready
+        port: http
+      failureThreshold: 60
+      periodSeconds: 5
+  - name: readinessProbe
+    value:
+      httpGet:
+        path: /ready
+        port: http
+      periodSeconds: 10
+  - name: livenessProbe
+    value:
+      httpGet:
+        path: /ready
+        port: http
+      periodSeconds: 20
+      timeoutSeconds: 5
+      failureThreshold: 6
+
+workloads:
+- name: main
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: '{{helm.release}}'
+  kind: statefulset
+  primary: true
+  helm:
+    labels: podLabels
+    annotations: podAnnotations
+    volumes: extraVolumes
+  containers:
+  - name: tempo
+    image: grafana/tempo
+    helm:
+      resources: resources
+      env: envVars
+      mounts: extraVolumeMounts
