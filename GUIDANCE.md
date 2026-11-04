@@ -27,7 +27,7 @@ All ports are private; nothing is published outside the environment.
 ## Changing configuration
 
 Edit the `config` entry of the app service, not the file in the container. Tempo reads the file only when it starts:
-after saving a change, deploy the service with force deployment so the pod restarts. Keep the listen ports and storage
+after saving a change, deploy the service. Wodby restarts the pod when the file changed. Keep the listen ports and storage
 paths unchanged; the service's endpoints and volume depend on them.
 
 Common changes:
