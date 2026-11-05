@@ -138,6 +138,10 @@ workloads:
   containers:
   - name: tempo
     image: grafana/tempo
+    resources:
+      request:
+        cpu: 10
+        memory: 80
     helm:
       resources: resources
       env: envVars
