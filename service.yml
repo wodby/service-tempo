@@ -48,6 +48,14 @@ volumes:
     - name: persistence.size
       value: '{{volumes.data.size}}Gi'
 
+# Grafana Tempo accepts traces over OTLP/HTTP without authentication. Collectors in the same environment
+# link to it with these values.
+exports:
+- name: otlp_http_endpoint
+  value: '{{url.otlp-http}}'
+- name: otlp_http_authorization
+  value: ''
+
 configs:
 - name: config
   title: Tempo config
